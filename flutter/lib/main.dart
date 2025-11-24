@@ -14,7 +14,7 @@ class SupertonicApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Supertonic TTS',
+      title: 'Supertonic',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
@@ -208,7 +208,7 @@ class _TTSPageState extends State<TTSPage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('Supertonic TTS'),
+        title: const Text('Supertonic'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -234,7 +234,8 @@ class _TTSPageState extends State<TTSPage> {
                       ),
                     if (_isLoading || _isGenerating) const SizedBox(width: 12),
                     Expanded(
-                      child: Text(_status, style: const TextStyle(fontSize: 16)),
+                      child:
+                          Text(_status, style: const TextStyle(fontSize: 16)),
                     ),
                   ],
                 ),
@@ -256,8 +257,7 @@ class _TTSPageState extends State<TTSPage> {
             const SizedBox(height: 24),
 
             // Parameters
-            Text('Parameters',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text('Parameters', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
 
             // Denoising steps slider
@@ -274,13 +274,14 @@ class _TTSPageState extends State<TTSPage> {
                     label: _totalSteps.toString(),
                     onChanged: _isLoading || _isGenerating
                         ? null
-                        : (value) => setState(() => _totalSteps = value.toInt()),
+                        : (value) =>
+                            setState(() => _totalSteps = value.toInt()),
                   ),
                 ),
                 SizedBox(
                   width: 40,
-                  child: Text(_totalSteps.toString(),
-                      textAlign: TextAlign.right),
+                  child:
+                      Text(_totalSteps.toString(), textAlign: TextAlign.right),
                 ),
               ],
             ),
@@ -304,8 +305,8 @@ class _TTSPageState extends State<TTSPage> {
                 ),
                 SizedBox(
                   width: 40,
-                  child:
-                      Text(_speed.toStringAsFixed(2), textAlign: TextAlign.right),
+                  child: Text(_speed.toStringAsFixed(2),
+                      textAlign: TextAlign.right),
                 ),
               ],
             ),
