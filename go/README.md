@@ -33,10 +33,10 @@ brew install onnxruntime
 **Linux:**
 ```bash
 # Download ONNX Runtime from GitHub releases
-wget https://github.com/microsoft/onnxruntime/releases/download/v1.16.0/onnxruntime-linux-x64-1.16.0.tgz
-tar -xzf onnxruntime-linux-x64-1.16.0.tgz
-sudo cp onnxruntime-linux-x64-1.16.0/lib/* /usr/local/lib/
-sudo cp -r onnxruntime-linux-x64-1.16.0/include/* /usr/local/include/
+wget https://github.com/microsoft/onnxruntime/releases/download/v1.18.0/onnxruntime-linux-x64-1.18.0.tgz
+tar -xzf onnxruntime-linux-x64-1.18.0.tgz
+sudo cp onnxruntime-linux-x64-1.18.0/lib/* /usr/local/lib/
+sudo cp -r onnxruntime-linux-x64-1.18.0/include/* /usr/local/include/
 sudo ldconfig
 ```
 
