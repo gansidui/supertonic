@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -39,10 +40,10 @@ var (
 
 // TTSRequest holds TTS request parameters
 type TTSRequest struct {
-	SpeakerName string  `json:"speaker_name" form:"speaker_name"`
-	Text        string  `json:"text" form:"text"`
-	Lang        string  `json:"lang" form:"lang"`
-	VolumeGain  float32 `json:"volume_gain" form:"volume_gain"` // only applies when > 1.0
+	SpeakerName string  `json:"speaker_name"`
+	Text        string  `json:"text"`
+	Lang        string  `json:"lang"`
+	VolumeGain  float32 `json:"volume_gain"` // only applies when > 1.0
 }
 
 func main() {
@@ -168,9 +169,21 @@ func homeHandler(c *gin.Context) {
 
 func ttsHandler(c *gin.Context) {
 	var req TTSRequest
-	if err := c.ShouldBind(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+
+	if c.Request.Method == "GET" {
+		req.SpeakerName = c.Query("speaker_name")
+		req.Text = c.Query("text")
+		req.Lang = c.Query("lang")
+		if volumeGainStr := c.Query("volume_gain"); volumeGainStr != "" {
+			if volumeGain, err := strconv.ParseFloat(volumeGainStr, 32); err == nil {
+				req.VolumeGain = float32(volumeGain)
+			}
+		}
+	} else {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	// Validate required parameters
