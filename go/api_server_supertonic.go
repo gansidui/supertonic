@@ -1,13 +1,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
-	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gansidui/simplelogger"
@@ -25,13 +27,13 @@ const (
 	TotalStep       = 5
 	Speed           = 1.0
 	SilenceDuration = 0.3
+	TTSPoolSize     = 2
 )
 
 // Global variables
 var (
-	tts        *TextToSpeech
 	cfg        Config
-	ttsLock    sync.Mutex
+	ttsPool    chan *TextToSpeech        // model doesn't support concurrent inference, so we need to use a pool to manage the models
 	styleCache = make(map[string]*Style) // loaded at init, read-only after
 )
 
@@ -63,13 +65,17 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Load TTS model
-	log.Println("Loading TTS model...")
-	tts, err = LoadTextToSpeech(OnnxDir, false, cfg)
-	if err != nil {
-		log.Fatalf("Failed to load TTS model: %v", err)
+	// Initialize TTS instance pool
+	log.Printf("Loading TTS model pool (size=%d)...", TTSPoolSize)
+	ttsPool = make(chan *TextToSpeech, TTSPoolSize)
+	for i := 0; i < TTSPoolSize; i++ {
+		tts, err := LoadTextToSpeech(OnnxDir, false, cfg)
+		if err != nil {
+			log.Fatalf("Failed to load TTS model instance %d: %v", i, err)
+		}
+		ttsPool <- tts
+		log.Printf("Loaded TTS instance %d", i)
 	}
-	defer tts.Destroy()
 
 	// Preload all voice styles
 	log.Println("Preloading voice styles...")
@@ -98,9 +104,28 @@ func main() {
 		ReadTimeout:  600 * time.Second,
 		WriteTimeout: 600 * time.Second,
 	}
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatalf("Server failed: %v", err)
+
+	// Start server in goroutine
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+	sig := <-quit
+	log.Printf("Received signal: %v, shutting down server...", sig)
+
+	// Graceful shutdown with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("Server shutdown error: %v", err)
 	}
+
+	log.Println("Server exited")
 }
 
 // preloadVoiceStyles loads all voice styles from directory into cache
@@ -169,12 +194,12 @@ func ttsHandler(c *gin.Context) {
 		return
 	}
 
-	// Run TTS with lock (model doesn't support concurrent inference)
+	// Get TTS instance from pool
+	tts := <-ttsPool
 	start := time.Now()
-	ttsLock.Lock()
-	wav, duration, err := tts.Call(req.Text, req.Lang, style, TotalStep, Speed, SilenceDuration)
-	ttsLock.Unlock()
+	wavData, duration, err := tts.Call(req.Text, req.Lang, style, TotalStep, Speed, SilenceDuration)
 	elapsed := time.Since(start)
+	ttsPool <- tts // Return to pool
 
 	if err != nil {
 		log.Printf("TTS failed: %v", err)
@@ -190,7 +215,7 @@ func ttsHandler(c *gin.Context) {
 		req.SpeakerName, req.Lang, len(req.Text), duration, elapsed.Seconds(), rtf)
 
 	// Write WAV directly to response
-	wavData, err := encodeWav(wav, tts.SampleRate)
+	wavByts, err := encodeWav(wavData, tts.SampleRate)
 	if err != nil {
 		log.Printf("Failed to encode WAV: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to encode WAV: %v", err)})
@@ -198,7 +223,7 @@ func ttsHandler(c *gin.Context) {
 	}
 
 	c.Header("Content-Disposition", `attachment; filename="output.wav"`)
-	c.Data(http.StatusOK, "audio/wav", wavData)
+	c.Data(http.StatusOK, "audio/wav", wavByts)
 }
 
 // memWriteSeeker is an in-memory io.WriteSeeker
