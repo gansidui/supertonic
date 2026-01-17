@@ -39,9 +39,10 @@ var (
 
 // TTSRequest holds TTS request parameters
 type TTSRequest struct {
-	SpeakerName string `json:"speaker_name" form:"speaker_name"`
-	Text        string `json:"text" form:"text"`
-	Lang        string `json:"lang" form:"lang"`
+	SpeakerName string  `json:"speaker_name" form:"speaker_name"`
+	Text        string  `json:"text" form:"text"`
+	Lang        string  `json:"lang" form:"lang"`
+	VolumeGain  float32 `json:"volume_gain" form:"volume_gain"` // only applies when > 1.0
 }
 
 func main() {
@@ -198,6 +199,9 @@ func ttsHandler(c *gin.Context) {
 	tts := <-ttsPool
 	start := time.Now()
 	wavData, duration, err := tts.Call(req.Text, req.Lang, style, TotalStep, Speed, SilenceDuration)
+	if req.VolumeGain > 1.0 {
+		wavData = applyGain(wavData, req.VolumeGain)
+	}
 	elapsed := time.Since(start)
 	ttsPool <- tts // Return to pool
 
@@ -294,4 +298,17 @@ func encodeWav(audioData []float32, sampleRate int) ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+func applyGain(samples []float32, gain float32) []float32 {
+	for i, s := range samples {
+		v := s * gain
+		if v > 1.0 {
+			v = 1.0
+		} else if v < -1.0 {
+			v = -1.0
+		}
+		samples[i] = v
+	}
+	return samples
 }
