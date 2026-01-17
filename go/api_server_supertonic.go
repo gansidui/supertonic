@@ -185,8 +185,8 @@ func ttsHandler(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Received TTS request, speaker=%s, lang=%s, text_size=%d",
-		req.SpeakerName, req.Lang, len(req.Text))
+	log.Printf("Received TTS request, speaker=%s, lang=%s, text_size=%d, volume_gain=%f",
+		req.SpeakerName, req.Lang, len(req.Text), req.VolumeGain)
 
 	// Get voice style from cache
 	style, err := getVoiceStyle(req.SpeakerName)
