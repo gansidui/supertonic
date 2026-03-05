@@ -36,6 +36,8 @@ var (
 	cfg        Config
 	ttsPool    chan *TextToSpeech        // model doesn't support concurrent inference, so we need to use a pool to manage the models
 	styleCache = make(map[string]*Style) // loaded at init, read-only after
+
+	PoolAcquireTimeout = 5 * time.Second
 )
 
 // TTSRequest holds TTS request parameters
@@ -164,7 +166,13 @@ func getVoiceStyle(speakerName string) (*Style, error) {
 }
 
 func homeHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	select {
+	case tts := <-ttsPool:
+		ttsPool <- tts
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	default:
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "no available instance"})
+	}
 }
 
 func ttsHandler(c *gin.Context) {
@@ -208,21 +216,30 @@ func ttsHandler(c *gin.Context) {
 		return
 	}
 
-	// Get TTS instance from pool
-	tts := <-ttsPool
+	// Get TTS instance from pool with timeout
+	var tts *TextToSpeech
+	select {
+	case tts = <-ttsPool:
+	case <-time.After(PoolAcquireTimeout):
+		log.Printf("TTS pool acquire timeout after %v (all instances busy or stuck)", PoolAcquireTimeout)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "TTS service busy, try again later"})
+		return
+	}
+
+	defer func() { ttsPool <- tts }()
+
 	start := time.Now()
 	wavData, duration, err := tts.Call(req.Text, req.Lang, style, TotalStep, Speed, SilenceDuration)
-	if req.VolumeGain > 1.0 {
-		wavData = applyGain(wavData, req.VolumeGain)
-	}
-	elapsed := time.Since(start)
-	ttsPool <- tts // Return to pool
-
 	if err != nil {
 		log.Printf("TTS failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("TTS failed: %v", err)})
 		return
 	}
+
+	if req.VolumeGain > 1.0 {
+		wavData = applyGain(wavData, req.VolumeGain)
+	}
+	elapsed := time.Since(start)
 
 	var rtf float32
 	if duration > 0 {
