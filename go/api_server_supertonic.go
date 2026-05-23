@@ -25,7 +25,7 @@ const (
 	Port            = 8000
 	OnnxDir         = "assets/onnx"
 	VoiceStyleDir   = "assets/voice_styles"
-	TotalStep       = 5
+	TotalStep       = 10
 	Speed           = 1.0
 	SilenceDuration = 0.3
 	TTSPoolSize     = 2
